@@ -1,0 +1,52 @@
+#!/bin/bash
+set -e
+
+echo "Starting laravel deploy"
+
+su -c "touch /tmp/laravel-start-in-progress" -s /bin/sh www-data
+
+[ ! -z "${PHP_MEMORY_LIMIT}" ]         && sed -i "s/PHP_MEMORY_LIMIT/${PHP_MEMORY_LIMIT}/" /usr/local/etc/php/php.ini
+[ ! -z "${PHP_PORT}" ]                 && sed -i "s/PHP_PORT/${PHP_PORT}/" /usr/local/etc/php-fpm.conf
+[ ! -z "${PHP_PM_MAX_CHILDREN}" ]      && sed -i "s/PHP_PM_MAX_CHILDREN/${PHP_PM_MAX_CHILDREN}/" /usr/local/etc/php-fpm.conf
+[ ! -z "${PHP_PM_START_SERVERS}" ]     && sed -i "s/PHP_PM_START_SERVERS/${PHP_PM_START_SERVERS}/" /usr/local/etc/php-fpm.conf
+[ ! -z "${PHP_PM_MIN_SPARE_SERVERS}" ] && sed -i "s/PHP_PM_MIN_SPARE_SERVERS/${PHP_PM_MIN_SPARE_SERVERS}/" /usr/local/etc/php-fpm.conf
+[ ! -z "${PHP_PM_MAX_SPARE_SERVERS}" ] && sed -i "s/PHP_PM_MAX_SPARE_SERVERS/${PHP_PM_MAX_SPARE_SERVERS}/" /usr/local/etc/php-fpm.conf
+
+chown -R www-data:www-data /src
+chown -R www-data:www-data /home/composer
+
+echo "Running composer"
+su -c "composer install --optimize-autoloader --prefer-dist" -s /bin/sh www-data
+if [ ! -f /src/composer.lock ]; then
+    echo "Could not find /src/composer.lock. Did you map Laravel root folder (containing composer.json) to docker container /src folder? Example: docker run .. -v /var/www/html/laravelproject:/src"
+    exit 1
+fi
+
+echo "Making docker-laravel bin files executable."
+chmod +x /usr/local/bin/create-laravel-env-file.php
+chmod +x /src/artisan
+
+# Create .env based on dynamic resources allocated by .ebextensions scripts.
+echo "Creating .env file for dynamically allocated AWS resources..."
+su -c '/usr/local/bin/create-laravel-env-file.php' -s /bin/sh www-data
+
+# Migrate database.
+su -c "/src/artisan down" -s /bin/sh www-data
+su -c "/src/artisan storage:link" -s /bin/sh www-data
+su -c "/src/artisan migrate --force" -s /bin/sh www-data
+su -c "/src/artisan optimize" -s /bin/sh www-data
+su -c "/src/artisan up" -s /bin/sh www-data
+
+echo "Correcting permissions"
+chown -R www-data:www-data /src
+chmod -R 0777 /src
+
+rm /tmp/laravel-start-in-progress
+
+# Only start php-fpm if successful ...
+if [ -f /src/composer.lock ]; then
+   echo "Starting php-fpm"
+   /usr/local/sbin/php-fpm
+else
+    echo "ERROR: could not find /src/composer.lock in laravel php container.... Did you mount laravel root dir as a volume to /src? You should..."
+fi
