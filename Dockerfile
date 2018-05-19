@@ -1,9 +1,9 @@
 FROM php:7.2.5-fpm
 
-LABEL maintainer="Pedro Pinheiro"
+LABEL maintainer="Pedro Pinheiro <pinheiro.pedrohl@gmail.com>"
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
     curl \
     git \
     libfreetype6-dev \
@@ -18,36 +18,37 @@ RUN apt-get update \
     libxslt1-dev \
     python-pip \
     redis-tools \
-  && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --upgrade setuptools
 
 # AWS cli is nice to have on aws, think: PaaS.
-RUN pip install awscli
+RUN pip install awscli --upgrade --user
 
 # Eb cli is nice to have on aws, think: PaaS.
-RUN pip install --upgrade awsebcli
+RUN pip install  awsebcli --upgrade --user
 
-RUN docker-php-ext-configure \
-  gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/
+RUN docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/
 
 RUN docker-php-ext-install \
-  gd \
-  intl \
-  mbstring \
-  mcrypt \
-  pdo_mysql \
-  pdo_pgsql \
-  xsl \
-  zip \
-  opcache
+    gd \
+    intl \
+    pdo_mysql \
+    pdo_pgsql \
+    xsl \
+    zip \
+    opcache
 
 RUN pecl install -o -f redis \
     &&  rm -rf /tmp/pear \
     &&  docker-php-ext-enable redis
 
-# Copy opcache configration
-COPY ./opcache.ini /usr/local/etc/php/conf.d/opcache.ini
+COPY resources/conf/opcache.ini /usr/local/etc/php/conf.d/opcache.ini
+COPY resources/conf/php.ini /usr/local/etc/php/
+COPY resources/conf/php-fpm.conf /usr/local/etc/
+COPY resources/bin/* /usr/local/bin/
 
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer --version=1.2.0
+RUN curl -sS https://getcomposer.org/installer | php -- -d memory=-1 --install-dir=/usr/local/bin --filename=composer --version=1.2.0
 
 ENV APP_DIR "/src"
 ENV PHP_MEMORY_LIMIT 1G
