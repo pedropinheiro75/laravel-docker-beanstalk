@@ -12,7 +12,9 @@ su -c "touch /tmp/laravel-start-in-progress" -s /bin/sh www-data
 [ ! -z "${PHP_PM_MIN_SPARE_SERVERS}" ] && sed -i "s/PHP_PM_MIN_SPARE_SERVERS/${PHP_PM_MIN_SPARE_SERVERS}/" /usr/local/etc/php-fpm.conf
 [ ! -z "${PHP_PM_MAX_SPARE_SERVERS}" ] && sed -i "s/PHP_PM_MAX_SPARE_SERVERS/${PHP_PM_MAX_SPARE_SERVERS}/" /usr/local/etc/php-fpm.conf
 
-chown -R www-data:www-data /src
+# Make sure this line comes last, otherwise find/replace will replace above vars
+[ ! -z "${PHP_PM}" ]                   && sed -i "s/PHP_PM/${PHP_PM}/" /usr/local/etc/php-fpm.conf
+
 chown -R www-data:www-data /home/composer
 
 echo "Running composer"
@@ -24,13 +26,13 @@ fi
 
 echo "Making docker-laravel bin files executable."
 chmod +x /usr/local/bin/create-laravel-env-file.php
-chmod +x /src/artisan
+su -c "chmod +x /src/artisan" -s /bin/sh www-data
 
 # Create .env based on dynamic resources allocated by .ebextensions scripts.
 echo "Creating .env file for dynamically allocated AWS resources..."
 su -c '/usr/local/bin/create-laravel-env-file.php' -s /bin/sh www-data
 
-# Migrate database.
+Migrate database.
 su -c "/src/artisan down" -s /bin/sh www-data
 su -c "/src/artisan storage:link" -s /bin/sh www-data
 su -c "/src/artisan migrate --force" -s /bin/sh www-data
@@ -38,8 +40,9 @@ su -c "/src/artisan optimize" -s /bin/sh www-data
 su -c "/src/artisan up" -s /bin/sh www-data
 
 echo "Correcting permissions"
-chown -R www-data:www-data /src
-chmod -R 0777 /src
+su -c "chattr -i /src" -s /bin/sh www-data
+su -c "chown -R www-data:www-data /src" -s /bin/sh www-data
+su -c "chmod -R 0777 /src" -s /bin/sh www-data
 
 rm /tmp/laravel-start-in-progress
 

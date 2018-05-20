@@ -48,6 +48,8 @@ COPY resources/conf/php.ini /usr/local/etc/php/
 COPY resources/conf/php-fpm.conf /usr/local/etc/
 COPY resources/bin/* /usr/local/bin/
 
+WORKDIR /src
+
 RUN curl -sS https://getcomposer.org/installer | php -- -d memory=-1 --install-dir=/usr/local/bin --filename=composer --version=1.2.0
 
 ENV APP_DIR "/src"
@@ -60,6 +62,10 @@ ENV PHP_PM_MIN_SPARE_SERVERS 2
 ENV PHP_PM_MAX_SPARE_SERVERS 6
 
 ENV COMPOSER_HOME /home/composer
+
+RUN mkdir -p /home/composer
+
+RUN mkdir -p /var/www
 
 RUN mkdir -p /tmp/envs && touch /tmp/envs/env_file
 
